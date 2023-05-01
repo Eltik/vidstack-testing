@@ -389,9 +389,9 @@ const Test: NextPage<any, any> = (props:any) => {
 };
 
 export async function getServerSideProps() {
-    const id = "148098";
-    const provider = "9anime";
-    const watchId = "HTWfDc0l";
+    const id = "155783";
+    const provider = "Zoro";
+    const watchId = decodeURIComponent("%2Fwatch%2Fheavenly-delusion-18349%3Fep%3D99937");
 
     const { data } = await axios.get(String(process.env.BACKEND_URL) + `/info/${id}`, { method: "GET", headers: { "Content-Type": "application/json" } });
     
