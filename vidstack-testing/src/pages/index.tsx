@@ -1,38 +1,39 @@
-/* eslint-disable @typescript-eslint/no-empty-function */
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react/no-unescaped-entities */
-/* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/restrict-plus-operands */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-empty-function */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable @next/next/no-typos */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/require-await */
-
-import { type NextPage } from "next";
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import axios from "axios";
-import { MediaFullscreenButton, MediaMuteButton, MediaPlayButton, MediaPlayer, MediaSliderValue, MediaTime, MediaTimeSlider, MediaVolumeSlider } from "@vidstack/react";
+import Head from "next/head";
 import 'vidstack/styles/defaults.css';
+import { MediaFullscreenButton, MediaMuteButton, MediaOutlet, MediaPlayButton, MediaPlayer, MediaSliderValue, MediaTime, MediaTimeSlider, MediaVolumeSlider } from '@vidstack/react';
 import styles from "~/styles/watch.module.css"
 import { type MediaPlayerElement } from "vidstack";
+import React, { useEffect, useRef, useState } from "react";
 import { SettingsPanel } from "~/components/settings_panel";
 import { ChaptersPanel } from "~/components/chapters_panel";
-import { useEffect, useRef, useState } from "react";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-const Test: NextPage<any, any> = (props:any) => {
-    const player:any = useRef<MediaPlayerElement>(null);
-    const [src, setSrc] = useState(props.sources.sources[props.sources.sources.length - 1] ? props.sources.sources[props.sources.sources.length - 1].url : "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-    
+export default function Watch(props: any) {
     const [open, setOpen] = useState(false);
     const [showChapters, setShowChapters] = useState(false);
+    const [subtitle, setSubtitle] = useState(props.sources.subtitles.length > 0 ? props.sources.subtitles[0].url : "");
 
-    const [fetchedLocal, setFetchedLocal] = useState(false);
+    function back() {
+        window.location.replace(`/info/${props.data.id}`);
+    }
 
+    const player:any = useRef<MediaPlayerElement>(null);
+
+    const [src, setSrc] = useState(props.sources.sources[props.sources.sources.length - 1] ? props.sources.sources[props.sources.sources.length - 1].url : "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     const [autoSkip, setAutoSkip] = useState(false);
     const [autoNext, setAutoNext] = useState(false);
     const [autoFullscreen, setAutoFullscreen] = useState(false);
@@ -40,19 +41,205 @@ const Test: NextPage<any, any> = (props:any) => {
     const [fontColor, setFontColor] = useState("#ffffff");
     const [cueMb, setCueMb] = useState("15");
 
-    function back() {
-        window.location.replace(`/info/${props.data.id}`);
-    }
-    
+    const [fetchedLocal, setFetchedLocal] = useState(false);
+
     useEffect(() => {
+        // Enable English subs by default
+        disableSubs(false);
+
         const acc = localStorage.getItem("account");
-        setFetchedLocal(true);
+        if (acc) {
+            const settings = JSON.parse(localStorage.getItem("account") as any)?.settings;
+
+            changeAutoSkip(settings?.autoSkip);
+            changeAutoNext(settings?.autoNext);
+            changeAutoFullscreen(settings?.autoFullscreen);
+
+            updateBackground(settings?.backgroundColor);
+            updateFontColor(settings?.fontColor);
+            updateCueMb(settings?.marginBottom);
+
+            setBgColor(settings?.backgroundColor);
+            setFontColor(settings?.fontColor);
+            setCueMb(settings?.marginBottom);
+
+            try {
+                (document.querySelector(`input[customid="bgColor"]`) as any).value = settings.backgroundColor;
+                (document.querySelector(`input[customid="fontColor"]`) as any).value = settings.fontColor;
+                (document.querySelector(`input[customid="marginBottom"]`) as any).value = settings.marginBottom;
+            } catch (e) {
+                console.error(e);
+            }
+    
+            console.log("Fetched local settings");
+            setFetchedLocal(true);
+            if (autoSkip) {
+                document.querySelector("." + styles.mediaPlayer)!.ariaChecked = "true";
+            }
+        } else {
+            setFetchedLocal(true)
+        }
+
+        // Captions
+        const video = document.querySelector('video')!;
+
+        return player.current?.subscribe(({ currentTime }:any) => {
+
+            setAutoSkip(document.querySelector("." + styles.mediaPlayer)!.ariaChecked == "true");
+            
+            if (props.sources.intro) {
+                if (document.querySelector("." + styles.mediaPlayer)!.ariaChecked == "true" && props.sources.intro && props.sources.intro.end != 0) {
+                    const opStart = props.sources.intro?.start;
+                    const opEnd = props.sources.intro?.end;
+    
+                    if (currentTime > opStart && currentTime < opEnd) {
+                        console.log("Skipping OP...");
+                        player.current.currentTime = opEnd;
+                        return null;
+                    }
+                }
+            }
+            if (props.sources.outro) {
+                if (document.querySelector("." + styles.mediaPlayer)!.ariaChecked == "true" && props.sources.outro && props.sources.outro.end != 0) {
+                    if (!props.sources.outro) {
+                        return;
+                    }
+                    
+                    const opStart = props.sources.outro.start;
+                    const opEnd = props.sources.outro.end;
+    
+                    if (currentTime > opStart && currentTime < opEnd) {
+                        console.log("Skipping EP...");
+                        player.current.currentTime = opEnd;
+                        return null;
+                    }
+                }
+            }
+
+            if (Math.abs(currentTime - video.duration) < 0.1) {
+                const autoNext = document.querySelector("." + styles.mediaPlayer)!.ariaAtomic == "true";
+                if (autoNext) {
+                    toast.success("Skipping to next episode!", {
+                        position: "top-right",
+                        autoClose: 2000,
+                        hideProgressBar: true,
+                        closeOnClick: true,
+                        pauseOnHover: true,
+                        draggable: true,
+                        progress: undefined,
+                        theme: "dark",
+                    });
+                    setTimeout(() => {
+                        const episodes = props.chaptersData;
+                        let episode;
+                        
+                        let minusOrPlus = 1;
+                        if ((episodes[0].number && episodes[0].number > episodes[1].number) || (!episodes[0].number && episodes[0].length === "GogoAnime")) {
+                            minusOrPlus = -1;
+                        }
+                        for (let i = 0; i < episodes.length; i++) {
+                            if (episodes[i].selected && episodes[i + minusOrPlus]) {
+                                episode = episodes[i + minusOrPlus].url;
+                            }
+                        }
+                        if (!episode) {
+                            toast.error("No next episode found.", {
+                                position: "top-right",
+                                autoClose: 2000,
+                                hideProgressBar: true,
+                                closeOnClick: true,
+                                pauseOnHover: true,
+                                draggable: true,
+                                progress: undefined,
+                                theme: "dark",
+                            });
+                        } else {
+                            window.location.replace(episode)
+                        }
+                    }, 1000);
+                }
+            }
+        });
     }, []);
 
-    return (
+    function changeQuality(url:any) {
+        setSrc(url);
+    }
+
+    function changeAutoSkip(value:boolean) {
+        document.querySelector("." + styles.mediaPlayer)!.ariaChecked = String(value);
+        setAutoSkip(value);
+    }
+
+    function changeAutoNext(value:boolean) {
+        document.querySelector("." + styles.mediaPlayer)!.ariaAtomic = String(value);
+        setAutoNext(value);
+    }
+
+    function changeAutoFullscreen(value:boolean) {
+        document.querySelector("." + styles.mediaPlayer)!.ariaModal = String(value);
+        setAutoFullscreen(value);
+    }
+
+    function changeSub(url:any) {
+        (document.querySelector("." + styles.mediaPlayer) as any)!.ariaDetails = url;
+        setSubtitle(url);
+    }
+
+    function updateFontSize(fontSize:any) {
+        const captions:any = document.querySelector("." + styles.captions);
+        const cueFontSize = window.getComputedStyle(captions).getPropertyValue('--cue-font-size');
+
+        captions.style.setProperty('--cue-font-size', `calc(var(--overlay-height) / 100 * ${fontSize})`);
+    }
+
+    function updateBackground(bg:any) {
+        const captions:any = document.querySelector("." + styles.captions);   
+        captions.style.setProperty('--cue-bg-color', bg);
+    }
+
+    function updateFontColor(bg:any) {
+        const captions:any = document.querySelector("." + styles.captions);   
+        captions.style.setProperty('--cue-color', bg);
+    }
+
+    function updateCueMb(value:any) {
+        const captions:any = document.querySelector("." + styles.captions);   
+        captions.style.setProperty('--cue-margin_bottom', value + "vh");
+    }
+
+    function disableSubs(value:boolean) {
+        if (value) {
+            (document.querySelector("." + styles.mediaPlayer) as any)!.ariaDetails = "";
+            setSubtitle("");
+        } else {
+            const subs = props.sources.subtitles;
+            let possible = "";
+            
+            for (let i = 0; i < subs.length; i++) {
+                if (subs[i].lang.toLowerCase() === "english" || subs[i].lang.toLowerCase() === "en-us") {
+                    possible = subs[i].url;
+                }
+            }
+            if (possible.length === 0) {
+                possible = subs[0]?.url;
+            }
+
+            (document.querySelector("." + styles.mediaPlayer) as any)!.ariaDetails = possible;
+            setSubtitle(possible);
+        }
+    }
+
+    return(
         <>
+        <ToastContainer />
+        <Head>
+            <title>{"Watching " + ((props.data.title.english) ?? (props.data.title.romaji))}</title>
+            <meta name="description" content={props.description} />
+            <link rel="icon" href="/favicon.ico" />
+        </Head>
         <main className={`${styles.main} flex w-[100vw] h-[100vh] flex-col justify-center items-center bg-gradient-to-b from-[#191A1C] to-[#191A1C]`}>
-            <MediaPlayer ref={player} className={`${styles.mediaPlayer} transition-all duration-200 flex flex-col w-full h-full justify-center items-center`} preload="metadata" aspectRatio={16/9}
+            <MediaPlayer ref={player} aria-checked={false} aria-atomic={false} aria-modal={false} aria-details={subtitle} className={`${styles.mediaPlayer} transition-all duration-200 flex flex-col w-full h-full justify-center items-center`} preload="metadata" aspectRatio={16/9}
                 src={{
                     src: src,
                     type: "application/x-mpegurl"
@@ -67,7 +254,8 @@ const Test: NextPage<any, any> = (props:any) => {
                         default: sub.lang.toLowerCase() === "english" || sub.lang.toLowerCase() === "en-us",
                     }
                 })}
-            >
+                >
+                <MediaOutlet />
                 <div className={styles.mediaBufferingContainer}>
                     <svg className={styles.mediaBufferingIcon} fill="none" viewBox="0 0 120 120" aria-hidden="true">
                         <circle className="opacity-25" cx="60" cy="60" r="54" stroke="currentColor" strokeWidth="8" />
@@ -189,7 +377,7 @@ const Test: NextPage<any, any> = (props:any) => {
                                                                 : ""
                                                         }</h4></div>`,
                                                         altText: ep.quality,
-                                                        callback: () => console.log(ep.url),
+                                                        callback: () => changeQuality(ep.url),
                                                         highlightable: true,
                                                         selected: ep.quality == "1080p" ? true : false,
                                                     };
@@ -205,7 +393,7 @@ const Test: NextPage<any, any> = (props:any) => {
                                                     if (!sub.open) {
                                                         return {
                                                             text: sub.text,
-                                                            callback: () => console.log(sub.url),
+                                                            callback: () => changeSub(sub.url),
                                                             highlightable: true,
                                                             selected: sub.text == "English" ? true : false,
                                                         };
@@ -228,8 +416,8 @@ const Test: NextPage<any, any> = (props:any) => {
                                                     {
                                                         text: "Disable Subs",
                                                         toggle: true,
-                                                        toggleOn: () => console.log("toggle on"),
-                                                        toggleOff: () => console.log("toggle off"),
+                                                        toggleOn: () => disableSubs(true),
+                                                        toggleOff: () => disableSubs(false),
                                                     },
                                                     {
                                                         text: "Font Color",
@@ -237,7 +425,7 @@ const Test: NextPage<any, any> = (props:any) => {
                                                         value: fontColor,
                                                         customId: "fontColor",
                                                         onInput: function (value:any) {
-                                                            console.log(value.target.value);
+                                                            updateFontColor(value.target.value);
                                                         },
                                                     },
                                                     {
@@ -246,7 +434,7 @@ const Test: NextPage<any, any> = (props:any) => {
                                                         value: bgColor,
                                                         customId: "bgColor",
                                                         onInput: function (value:any) {
-                                                            console.log(value.target.value);
+                                                            updateBackground(value.target.value);
                                                         },
                                                     },
                                                     {
@@ -255,7 +443,7 @@ const Test: NextPage<any, any> = (props:any) => {
                                                         value: "3.5",
                                                         customId: "fontSize",
                                                         onInput: function (value:any) {
-                                                            console.log(value.target.value);
+                                                            updateFontSize(value.target.value);
                                                         },
                                                     },
                                                     {
@@ -264,7 +452,7 @@ const Test: NextPage<any, any> = (props:any) => {
                                                         value: cueMb,
                                                         customId: "marginBottom",
                                                         onInput: function (value:any) {
-                                                            console.log(value.target.value);
+                                                            updateCueMb(value.target.value);
                                                         },
                                                     },
                                                 ],
@@ -307,24 +495,24 @@ const Test: NextPage<any, any> = (props:any) => {
                                                         html: '<h3 class="qualityText" id="auto-next">Auto-Next</h3>',
                                                         customId: "autoNext",
                                                         toggle: true,
-                                                        toggleOn: () => console.log(true),
-                                                        toggleOff: () => console.log(false),
+                                                        toggleOn: () => changeAutoNext(true),
+                                                        toggleOff: () => changeAutoNext(false),
                                                         on: autoNext
                                                     },
                                                     {
                                                         html: '<h3 class="qualityText" id="auto-fullscreen">Auto-Fullscreen</h3>',
                                                         customId: "autoFullscreen",
                                                         toggle: true,
-                                                        toggleOn: () => console.log(true),
-                                                        toggleOff: () => console.log(false),
+                                                        toggleOn: () => changeAutoFullscreen(true),
+                                                        toggleOff: () => changeAutoFullscreen(false),
                                                         on: autoFullscreen
                                                     },
                                                     {
                                                         html: '<h3 class="qualityText" id="auto-skip">Auto-Skip</h3>',
                                                         customId: "autoSkip",
                                                         toggle: true,
-                                                        toggleOn: () => console.log(true),
-                                                        toggleOff: () => console.log(false),
+                                                        toggleOn: () => changeAutoSkip(true),
+                                                        toggleOff: () => changeAutoSkip(false),
                                                         on: autoSkip
                                                     },
                                                 ],
@@ -339,45 +527,43 @@ const Test: NextPage<any, any> = (props:any) => {
                                 />
                             </div>
                         </div>
-                        <div className={`${styles.mediaControlsGroup}`}></div>
-                        <div className={`${styles.mediaControlsGroup} flex flex-row w-full md:w-[95%] gap-3 justify-between items-center justify-self-center z-30 opacity-100 transition-all duration-300 ease-in-out`} style={{
-                            gridArea: "1/1/1/1"
-                        }}>
-                            <div className={`${styles.ui} flex flex-row justify-center items-center gap-[15px] z-30 z-100 font-bold`}>
-                                <div className="flex center justify-center items-center h-[35px] transition-all duration-200 hover:bg-[hsla(0,0%,76%,.2)] rounded-md">
-                                    <MediaPlayButton aria-keyshortcuts="Space">
-                                        <svg slot="play" height="32" id="Layer_1" version="1.1" viewBox="0 0 512 512" width="32" xmlSpace="preserve" xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" {...({} as any)}>
-                                            <path d="M405.2,232.9L126.8,67.2c-3.4-2-6.9-3.2-10.9-3.2c-10.9,0-19.8,9-19.8,20H96v344h0.1c0,11,8.9,20,19.8,20  c4.1,0,7.5-1.4,11.2-3.4l278.1-165.5c6.6-5.5,10.8-13.8,10.8-23.1C416,246.7,411.8,238.5,405.2,232.9z" fill="#fff" />
-                                        </svg>
-                                        <svg slot="pause" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" className="transition-all decoration-neutral-150 ease-linear" {...({} as any)}>
-                                            <path d="M10.65 19.11V4.89c0-1.35-.57-1.89-2.01-1.89H5.01C3.57 3 3 3.54 3 4.89v14.22C3 20.46 3.57 21 5.01 21h3.63c1.44 0 2.01-.54 2.01-1.89ZM21.002 19.11V4.89c0-1.35-.57-1.89-2.01-1.89h-3.63c-1.43 0-2.01.54-2.01 1.89v14.22c0 1.35.57 1.89 2.01 1.89h3.63c1.44 0 2.01-.54 2.01-1.89Z" fill="#ffffff"></path>
-                                        </svg>
-                                    </MediaPlayButton>
-                                </div>
-                                <div className="flex center justify-center items-center h-[35px] transition-all duration-200 hover:bg-[hsla(0,0%,76%,.2)] rounded-md">
-                                    <MediaMuteButton aria-keyshortcuts="m" />
-                                    <MediaVolumeSlider className="group mx-[calc(var(--thumb-size)/2)] h-12 flex items-center transition-all duration-200 ease-in-out min-w-[5vw]" style={{ '--thumb-size': '14px', '--track-height': '4px' }}>
-                                        <div className="absolute top-1/2 left-0 z-0 h-[var(--track-height)] w-full -translate-y-1/2 transform bg-[#5a595a] outline-none group-data-[focus]:ring-4 group-data-[focus]:ring-blue-400"></div>
-                                        <div className="absolute top-1/2 left-0 z-20 h-[var(--track-height)] w-full -translate-y-1/2 scale-x-[var(--slider-fill-rate)] transform bg-white will-change-transform" style={{ transformOrigin: 'left center' }} />
-                                        <div className="absolute top-0 left-[var(--slider-fill-percent)] z-20 h-full w-[var(--thumb-size)] -translate-x-1/2 transform group-data-[dragging]:left-[var(--slider-pointer-percent)]">
-                                            <div className="absolute top-1/2 left-0 h-[var(--thumb-size)] w-[var(--thumb-size)] -translate-y-1/2 transform rounded-full bg-white opacity-0 transition-opacity duration-150 ease-in group-data-[interactive]:opacity-100"></div>
-                                        </div>
-                                        <div className="absolute top-[var(--preview-top)] left-[var(--preview-left)] flex -translate-x-1/2 transform items-center justify-center rounded-sm bg-black px-2.5 py-1 text-white/80 opacity-0 transition-opacity duration-200 ease-out group-data-[interactive]:opacity-100 group-data-[interactive]:ease-in" slot="preview">
-                                            <MediaSliderValue type="pointer" format="percent" />
-                                        </div>
-                                    </MediaVolumeSlider>
-                                </div>
+                    </div>
+                    <div className={`${styles.mediaControlsGroup}`}></div>
+                    <div className={`${styles.mediaControlsGroup} flex flex-row w-full md:w-[95%] gap-3 justify-between items-center justify-self-center z-30 opacity-100 transition-all duration-300 ease-in-out`} style={{
+                        gridArea: "1/1/1/1"
+                    }}>
+                        <div className={`${styles.ui} flex flex-row justify-center items-center gap-[15px] z-30 z-100 font-bold`}>
+                            <div className="flex center justify-center items-center h-[35px] transition-all duration-200 hover:bg-[hsla(0,0%,76%,.2)] rounded-md">
+                                <MediaPlayButton aria-keyshortcuts="Space">
+                                    <svg slot="play" height="32" id="Layer_1" version="1.1" viewBox="0 0 512 512" width="32" xmlSpace="preserve" xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" {...({} as any)}>
+                                        <path d="M405.2,232.9L126.8,67.2c-3.4-2-6.9-3.2-10.9-3.2c-10.9,0-19.8,9-19.8,20H96v344h0.1c0,11,8.9,20,19.8,20  c4.1,0,7.5-1.4,11.2-3.4l278.1-165.5c6.6-5.5,10.8-13.8,10.8-23.1C416,246.7,411.8,238.5,405.2,232.9z" fill="#fff" />
+                                    </svg>
+                                    <svg slot="pause" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" className="transition-all decoration-neutral-150 ease-linear" {...({} as any)}>
+                                        <path d="M10.65 19.11V4.89c0-1.35-.57-1.89-2.01-1.89H5.01C3.57 3 3 3.54 3 4.89v14.22C3 20.46 3.57 21 5.01 21h3.63c1.44 0 2.01-.54 2.01-1.89ZM21.002 19.11V4.89c0-1.35-.57-1.89-2.01-1.89h-3.63c-1.43 0-2.01.54-2.01 1.89v14.22c0 1.35.57 1.89 2.01 1.89h3.63c1.44 0 2.01-.54 2.01-1.89Z" fill="#ffffff"></path>
+                                    </svg>
+                                </MediaPlayButton>
                             </div>
-                            <div className={`${styles.ui} flex flex-row justify-center items-center m-0 z-30 w-[95%]`}>
-                                <MediaTimeSlider className="flex items-center w-full"></MediaTimeSlider>
+                            <div className="flex center justify-center items-center h-[35px] transition-all duration-200 hover:bg-[hsla(0,0%,76%,.2)] rounded-md">
+                                <MediaMuteButton aria-keyshortcuts="m" />
+                                <MediaVolumeSlider className="group mx-[calc(var(--thumb-size)/2)] h-12 flex items-center transition-all duration-200 ease-in-out min-w-[5vw]" style={{ '--thumb-size': '14px', '--track-height': '4px' }}>
+                                    <div className="absolute top-1/2 left-0 z-0 h-[var(--track-height)] w-full -translate-y-1/2 transform bg-[#5a595a] outline-none group-data-[focus]:ring-4 group-data-[focus]:ring-blue-400"></div>
+                                    <div className="absolute top-1/2 left-0 z-20 h-[var(--track-height)] w-full -translate-y-1/2 scale-x-[var(--slider-fill-rate)] transform bg-white will-change-transform" style={{ transformOrigin: 'left center' }} />
+                                    <div className="absolute top-0 left-[var(--slider-fill-percent)] z-20 h-full w-[var(--thumb-size)] -translate-x-1/2 transform group-data-[dragging]:left-[var(--slider-pointer-percent)]">
+                                        <div className="absolute top-1/2 left-0 h-[var(--thumb-size)] w-[var(--thumb-size)] -translate-y-1/2 transform rounded-full bg-white opacity-0 transition-opacity duration-150 ease-in group-data-[interactive]:opacity-100"></div>
+                                    </div>
+                                    <div className="absolute top-[var(--preview-top)] left-[var(--preview-left)] flex -translate-x-1/2 transform items-center justify-center rounded-sm bg-black px-2.5 py-1 text-white/80 opacity-0 transition-opacity duration-200 ease-out group-data-[interactive]:opacity-100 group-data-[interactive]:ease-in" slot="preview">
+                                        <MediaSliderValue type="pointer" format="percent" />
+                                    </div>
+                                </MediaVolumeSlider>
                             </div>
-                            <div className={`${styles.ui} flex flex-row justify-center items-center`}>
-                            <div className="flex flex-row justify-center items-center text-white font-bold">
-                                <MediaTime type="current"></MediaTime>/<MediaTime type="duration"></MediaTime>
-                            </div>
-                                <div className="flex center justify-center items-center h-[35px] transition-all duration-200 hover:bg-[hsla(0,0%,76%,.2)] rounded-md">
-                                    <MediaFullscreenButton aria-keyshortcuts="f"></MediaFullscreenButton>
-                                </div>
+                        </div>
+                        <div className={`${styles.ui} flex flex-row justify-center items-center m-0 z-30 w-[95%]`}>
+                            <MediaTimeSlider className="flex items-center w-full"></MediaTimeSlider>
+                        </div>
+                        <div className={`${styles.ui} flex flex-row justify-center items-center`}>
+                        <div className="flex flex-row justify-center items-center text-white font-bold"><MediaTime type="current"></MediaTime>/<MediaTime type="duration"></MediaTime></div>
+                            <div className="flex center justify-center items-center h-[35px] transition-all duration-200 hover:bg-[hsla(0,0%,76%,.2)] rounded-md">
+                                <MediaFullscreenButton aria-keyshortcuts="f"></MediaFullscreenButton>
                             </div>
                         </div>
                     </div>
@@ -385,13 +571,17 @@ const Test: NextPage<any, any> = (props:any) => {
             </MediaPlayer>
         </main>
         </>
-    );
-};
+    )
+}
 
-export async function getServerSideProps() {
+export async function getServerSideProps(context: any) {
     const id = "155783";
-    const provider = "Zoro";
+    let provider = "Zoro";
     const watchId = decodeURIComponent("%2Fwatch%2Fheavenly-delusion-18349%3Fep%3D99937");
+
+    if (provider.toLowerCase().includes("dub")) {
+        provider = "gogoanime";
+    }
 
     const { data } = await axios.get(String(process.env.BACKEND_URL) + `/info/${id}`, { method: "GET", headers: { "Content-Type": "application/json" } });
     
@@ -405,8 +595,7 @@ export async function getServerSideProps() {
 
     for (let i = 0; i < episodes.length; i++) {
         const providerEp = episodes[i];
-
-        // Temp
+        
         providerEp.providerId = providerEp.provider;
 
         for (let j = 0; j < providerEp.episodes.length; j++) {
@@ -432,7 +621,6 @@ export async function getServerSideProps() {
     
     const { data: watchData } = await axios.post(String(process.env.BACKEND_URL) + `/sources`, {
         id: id,
-        //providerId: provider,
         provider: provider,
         watchId: watchId
     }, { method: "POST", headers: { "Content-Type": "application/json" } });
@@ -493,5 +681,3 @@ export async function getServerSideProps() {
         },
     };
 }
-
-export default Test;

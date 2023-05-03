@@ -37,7 +37,7 @@ export function ChaptersPanel(props: any) {
                         setSelectedChapter(i)
                         window.location.href = (el.url ?? "");
                     }}>
-                        <h4 className="w-[42px] h-[52px] flex justify-center pt-[8px] font-normal text-white text-base">{i + 1}</h4>
+                        <h4 className="w-[42px] h-[52px] flex justify-center pt-[8px] font-normal text-white text-base">{el.number}</h4>
                         <div className="flex flex-col">
                             <h4 className="font-medium text-white text-base">{el.title}</h4>
                             <h4 className="text-[#8a8a8a] font-normal text-sm">{el.length}</h4>
