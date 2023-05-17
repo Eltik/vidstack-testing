@@ -28,6 +28,7 @@ export default function Index() {
             <p>/proxy uses String(process.env.M3U8_PROXY)/proxy/emncoded_url</p>
             <p>/raw uses url with no proxy</p>
             <p>/cors uses String(process.env.M3U8_PROXY)/emncoded_url</p>
+            <p>note that /cors works lol</p>
         </main>
         </>
     )

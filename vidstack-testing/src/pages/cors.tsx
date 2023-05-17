@@ -691,7 +691,8 @@ export async function getServerSideProps(context: any) {
         let language:any = "Unknown";
 
         if (ep.lang === "Thumbnails") {
-            thumbnails = `${String(process.env.M3U8_PROXY)}/${encodeURIComponent(ep.url)}`;
+            //thumbnails = `${String(process.env.M3U8_PROXY)}/${encodeURIComponent(ep.url)}`;
+            thumbnails = `${String(process.env.M3U8_PROXY)}/${(ep.url)}`;
             return;
         }
 
