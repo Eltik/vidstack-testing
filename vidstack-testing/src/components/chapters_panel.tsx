@@ -24,7 +24,7 @@ export function ChaptersPanel(props: any) {
             ['--chapterHeight' as any]: `${height}px`,
             backgroundColor: "rgba(10,10,10,0.8)",
             outline: "1px solid rgba(255, 255, 255, 0.04)"
-        }} className={`w-[280px] pt-[12px] pl-[12px] rounded-[12px] transition-all duration-300 overflow-x-hidden overflow-y-auto absolute top-[55px] right-[20px] panel ${props.showChapters ? "opacity-100 pointer-events-auto -translate-y-5" : "opacity-0 pointer-events-none translate-y-0"}`}>
+        }} className={`w-[280px] pt-[12px] pl-[12px] rounded-[12px] transition-all duration-300 overflow-x-hidden overflow-y-auto absolute top-[55px] right-[20px] panel ${props.showChapters ? "opacity-100 pointer-events-auto -translate-y-0" : "opacity-0 pointer-events-none translate-y-5"}`}>
         <div className="flex justify-between items-center mb-[8px] mr-[20px] pt-[10px] pb-[14px] border-b-[1px] border-b-[#8a8a8a] text-white text-lg">
                 Chapters
                 <svg width="18" height="18" viewBox="0 0 18 21" fill="white" xmlns="http://www.w3.org/2000/svg">
@@ -37,7 +37,7 @@ export function ChaptersPanel(props: any) {
                         setSelectedChapter(i)
                         window.location.href = (el.url ?? "");
                     }}>
-                        <h4 className="w-[42px] h-[52px] flex justify-center pt-[8px] font-normal text-white text-base">{el.number}</h4>
+                        <h4 className="w-[42px] h-[52px] flex justify-center pt-[8px] font-normal text-zinc-500 text-sm">{el.number}</h4>
                         <div className="flex flex-col">
                             <h4 className="font-medium text-white text-base">{el.title}</h4>
                             <h4 className="text-[#8a8a8a] font-normal text-sm">{el.length}</h4>

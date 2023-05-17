@@ -621,7 +621,7 @@ export function SettingsPanel(props: any) {
     }, [props.isOpen]);
 
     return (
-        <div className={`transition-all duration-300 ${props.isOpen ? "opacity-100 pointer-events-auto -translate-y-5" : "opacity-0 pointer-events-none translate-y-0"}`}>
+        <div className={`transition-all duration-300 ${props.isOpen ? "opacity-100 pointer-events-auto -translate-y-0" : "opacity-0 pointer-events-none translate-y-5"}`}>
             <div className="menuCon" ref={menuCon}></div>
         </div>
     );
