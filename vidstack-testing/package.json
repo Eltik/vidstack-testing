@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@t3-oss/env-nextjs": "^0.2.1",
+    "@vercel/analytics": "^1.0.1",
     "@vidstack/react": "^0.5.4",
     "axios": "^1.4.0",
     "next": "^13.2.4",
