@@ -10,13 +10,13 @@
   },
   "dependencies": {
     "@t3-oss/env-nextjs": "^0.2.1",
-    "@vidstack/react": "^0.4.5",
+    "@vidstack/react": "^0.5.4",
     "axios": "^1.4.0",
     "next": "^13.2.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-toastify": "^9.1.2",
-    "vidstack": "^0.4.5",
+    "vidstack": "^0.5.4",
     "zod": "^3.21.4"
   },
   "devDependencies": {

@@ -13,7 +13,7 @@
 import axios from "axios";
 import Head from "next/head";
 import 'vidstack/styles/defaults.css';
-import { MediaFullscreenButton, MediaMuteButton, MediaOutlet, MediaPlayButton, MediaPlayer, MediaSliderValue, MediaTime, MediaTimeSlider, MediaVolumeSlider } from '@vidstack/react';
+import { MediaCaptions, MediaFullscreenButton, MediaMuteButton, MediaOutlet, MediaPlayButton, MediaPlayer, MediaSliderThumbnail, MediaSliderValue, MediaTime, MediaTimeSlider, MediaTooltip, MediaVolumeSlider } from '@vidstack/react';
 import styles from "~/styles/watch.module.css"
 import { type MediaPlayerElement } from "vidstack";
 import React, { useEffect, useRef, useState } from "react";
@@ -23,37 +23,38 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 export default function Watch(props: any) {
+    const player = useRef<MediaPlayerElement>(null);
+
+    const [src, setSrc] = useState(props.sources.sources[props.sources.sources.length - 1]?.url);
     const [open, setOpen] = useState(false);
     const [showChapters, setShowChapters] = useState(false);
-    const [subtitle, setSubtitle] = useState(props.sources.subtitles.length > 0 ? props.sources.subtitles[0].url : "");
 
-    function back() {
-        window.location.replace(`/info/${props.data.id}`);
-    }
-
-    const player:any = useRef<MediaPlayerElement>(null);
-
-    const [src, setSrc] = useState(props.sources.sources[props.sources.sources.length - 1] ? props.sources.sources[props.sources.sources.length - 1].url : "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     const [autoSkip, setAutoSkip] = useState(false);
     const [autoNext, setAutoNext] = useState(false);
     const [autoFullscreen, setAutoFullscreen] = useState(false);
     const [bgColor, setBgColor] = useState("rgba(0, 0, 0, 0.7)");
     const [fontColor, setFontColor] = useState("#ffffff");
-    const [cueMb, setCueMb] = useState("15");
+    const [cueMt, setCueMt] = useState("0");
+    const [cueMb, setCueMb] = useState("5");
+    const [speed, setSpeed] = useState("1");
 
     const [fetchedLocal, setFetchedLocal] = useState(false);
 
-    useEffect(() => {
-        // Enable English subs by default
-        disableSubs(false);
+    function back() {
+        window.location.replace(`/info/${props.data.id}`);
+    }
 
+    useEffect(() => {
         const acc = localStorage.getItem("account");
         if (acc) {
             const settings = JSON.parse(localStorage.getItem("account") as any)?.settings;
 
             changeAutoSkip(settings?.autoSkip);
+            setAutoSkip(settings?.autoSkip);
             changeAutoNext(settings?.autoNext);
+            setAutoNext(settings?.autoNext);
             changeAutoFullscreen(settings?.autoFullscreen);
+            setAutoFullscreen(settings?.autoFullscreen);
 
             updateBackground(settings?.backgroundColor);
             updateFontColor(settings?.fontColor);
@@ -62,101 +63,62 @@ export default function Watch(props: any) {
             setBgColor(settings?.backgroundColor);
             setFontColor(settings?.fontColor);
             setCueMb(settings?.marginBottom);
-
-            try {
-                (document.querySelector(`input[customid="bgColor"]`) as any).value = settings.backgroundColor;
-                (document.querySelector(`input[customid="fontColor"]`) as any).value = settings.fontColor;
-                (document.querySelector(`input[customid="marginBottom"]`) as any).value = settings.marginBottom;
-            } catch (e) {
-                console.error(e);
-            }
+            setCueMt(settings?.marginTop);
     
             console.log("Fetched local settings");
             setFetchedLocal(true);
-            if (autoSkip) {
+            if (settings?.autoSkip) {
                 document.querySelector("." + styles.mediaPlayer)!.ariaChecked = "true";
+            }
+
+            if (settings?.autoFullscreen) {
+                setTimeout(() => {
+                    void (player.current as any)?.enterFullscreen().catch((err: any) => {
+                        console.error(err);
+                    });
+                }, 1000);
+            }
+
+            if (settings?.autoNext) {
+                (player.current as any)?.addEventListener("ended", () => {
+                    let nextEp = null;
+                    props.chaptersData.forEach((item: any, index: number) => {
+                        if (parseInt(item.number) === parseInt(props.episodeNumber)) {
+                            if (index === props.chaptersData.length - 1) {
+                                return;
+                            } else {
+                                nextEp = props.chaptersData[index + 1]?.url;
+                            }
+                        }
+                    });
+                    if (nextEp) {
+                        window.location.replace(nextEp);
+                    } else {
+                        console.log("No more episodes!");
+                    }
+                })
             }
         } else {
             setFetchedLocal(true)
         }
 
-        // Captions
-        const video = document.querySelector('video')!;
+        return (player.current as any)?.subscribe(({ currentTime }:any) => {
+            if (document.querySelector("." + styles.mediaPlayer)!.ariaChecked == "true") {
+                const opStart = props.sources.intro?.start;
+                const opEnd = props.sources.intro?.end;
 
-        return player.current?.subscribe(({ currentTime }:any) => {
+                const epStart = props.sources.outro?.start;
+                const epEnd = props.sources.outro?.end;
 
-            setAutoSkip(document.querySelector("." + styles.mediaPlayer)!.ariaChecked == "true");
-            
-            if (props.sources.intro) {
-                if (document.querySelector("." + styles.mediaPlayer)!.ariaChecked == "true" && props.sources.intro && props.sources.intro.end != 0) {
-                    const opStart = props.sources.intro?.start;
-                    const opEnd = props.sources.intro?.end;
-    
-                    if (currentTime > opStart && currentTime < opEnd) {
-                        console.log("Skipping OP...");
-                        player.current.currentTime = opEnd;
-                        return null;
-                    }
+                if (currentTime > opStart && currentTime < opEnd) {
+                    console.log("Skipping OP...");
+                    (player.current as any)!.currentTime = opEnd;
+                    return null;
                 }
-            }
-            if (props.sources.outro) {
-                if (document.querySelector("." + styles.mediaPlayer)!.ariaChecked == "true" && props.sources.outro && props.sources.outro.end != 0) {
-                    if (!props.sources.outro) {
-                        return;
-                    }
-                    
-                    const opStart = props.sources.outro.start;
-                    const opEnd = props.sources.outro.end;
-    
-                    if (currentTime > opStart && currentTime < opEnd) {
-                        console.log("Skipping EP...");
-                        player.current.currentTime = opEnd;
-                        return null;
-                    }
-                }
-            }
-
-            if (Math.abs(currentTime - video.duration) < 0.1) {
-                const autoNext = document.querySelector("." + styles.mediaPlayer)!.ariaAtomic == "true";
-                if (autoNext) {
-                    toast.success("Skipping to next episode!", {
-                        position: "top-right",
-                        autoClose: 2000,
-                        hideProgressBar: true,
-                        closeOnClick: true,
-                        pauseOnHover: true,
-                        draggable: true,
-                        progress: undefined,
-                        theme: "dark",
-                    });
-                    setTimeout(() => {
-                        const episodes = props.chaptersData;
-                        let episode;
-                        
-                        let minusOrPlus = 1;
-                        if ((episodes[0].number && episodes[0].number > episodes[1].number) || (!episodes[0].number && episodes[0].length === "GogoAnime")) {
-                            minusOrPlus = -1;
-                        }
-                        for (let i = 0; i < episodes.length; i++) {
-                            if (episodes[i].selected && episodes[i + minusOrPlus]) {
-                                episode = episodes[i + minusOrPlus].url;
-                            }
-                        }
-                        if (!episode) {
-                            toast.error("No next episode found.", {
-                                position: "top-right",
-                                autoClose: 2000,
-                                hideProgressBar: true,
-                                closeOnClick: true,
-                                pauseOnHover: true,
-                                draggable: true,
-                                progress: undefined,
-                                theme: "dark",
-                            });
-                        } else {
-                            window.location.replace(episode)
-                        }
-                    }, 1000);
+                if (currentTime > epStart && currentTime < epEnd) {
+                    console.log("Skipping EP...");
+                    (player.current as any)!.currentTime = epEnd;
+                    return null;
                 }
             }
         });
@@ -168,22 +130,22 @@ export default function Watch(props: any) {
 
     function changeAutoSkip(value:boolean) {
         document.querySelector("." + styles.mediaPlayer)!.ariaChecked = String(value);
-        setAutoSkip(value);
     }
 
     function changeAutoNext(value:boolean) {
         document.querySelector("." + styles.mediaPlayer)!.ariaAtomic = String(value);
-        setAutoNext(value);
     }
 
     function changeAutoFullscreen(value:boolean) {
         document.querySelector("." + styles.mediaPlayer)!.ariaModal = String(value);
-        setAutoFullscreen(value);
     }
 
     function changeSub(url:any) {
         (document.querySelector("." + styles.mediaPlayer) as any)!.ariaDetails = url;
-        setSubtitle(url);
+    }
+
+    function changeSpeed(value:any) {
+        (document.querySelector("." + styles.mediaPlayer) as any)!.playbackRate = value;
     }
 
     function updateFontSize(fontSize:any) {
@@ -203,6 +165,11 @@ export default function Watch(props: any) {
         captions.style.setProperty('--cue-color', bg);
     }
 
+    function updateCueMt(value:any) {
+        const captions:any = document.querySelector("." + styles.captions);   
+        captions.style.setProperty('--cue-margin_top', value + "vh");
+    }
+    
     function updateCueMb(value:any) {
         const captions:any = document.querySelector("." + styles.captions);   
         captions.style.setProperty('--cue-margin_bottom', value + "vh");
@@ -210,23 +177,11 @@ export default function Watch(props: any) {
 
     function disableSubs(value:boolean) {
         if (value) {
-            (document.querySelector("." + styles.mediaPlayer) as any)!.ariaDetails = "";
-            setSubtitle("");
+            const captions:any = document.querySelector(`.${styles.captions}`);
+            captions.style.display = "none";
         } else {
-            const subs = props.sources.subtitles;
-            let possible = "";
-            
-            for (let i = 0; i < subs.length; i++) {
-                if (subs[i].lang.toLowerCase() === "english" || subs[i].lang.toLowerCase() === "en-us") {
-                    possible = subs[i].url;
-                }
-            }
-            if (possible.length === 0) {
-                possible = subs[0]?.url;
-            }
-
-            (document.querySelector("." + styles.mediaPlayer) as any)!.ariaDetails = possible;
-            setSubtitle(possible);
+            const captions:any = document.querySelector(`.${styles.captions}`);
+            captions.style.display = "initial";
         }
     }
 
@@ -238,8 +193,12 @@ export default function Watch(props: any) {
             <meta name="description" content={props.description} />
             <link rel="icon" href="/favicon.ico" />
         </Head>
-        <main className={`${styles.main} flex w-[100vw] h-[100vh] flex-col justify-center items-center bg-gradient-to-b from-[#191A1C] to-[#191A1C]`}>
-            <MediaPlayer ref={player} aria-checked={false} aria-atomic={false} aria-modal={false} aria-details={subtitle} className={`${styles.mediaPlayer} transition-all duration-200 flex flex-col w-full h-full justify-center items-center`} preload="metadata" aspectRatio={16/9}
+        <main className={`${styles.main} flex w-[100vw] h-[100vh] flex-col justify-center items-center bg-gradient-to-b from-[#191A1C] to-[#191A1C] overflow-x-hidden`}>
+            <MediaPlayer
+                ref={player}
+                crossorigin="anonymous"
+                aspectRatio={16/9}
+                className={`${styles.mediaPlayer} transition-all duration-200 flex flex-col w-full h-full justify-center items-center`}
                 src={{
                     src: src,
                     type: "application/x-mpegurl"
@@ -247,15 +206,18 @@ export default function Watch(props: any) {
                 textTracks={props.sources.subtitles.map((sub:any) => {
                     return {
                         id: sub.lang,
-                        label: sub.lang,
+                        label: sub.label ?? sub.lang,
                         kind: "subtitles",
                         src: sub.url,
                         language: sub.lang,
-                        default: sub.lang.toLowerCase() === "english" || sub.lang.toLowerCase() === "en-us",
+                        default: sub.label ? (sub.label?.toLowerCase() === "english" || sub.label?.toLowerCase() === "en-us") : (sub.lang?.toLowerCase() === "english" || sub.lang?.toLowerCase() === "en-us"),
                     }
                 })}
-                >
-                <MediaOutlet />
+                thumbnails={props.thumbnails}
+            >
+                <MediaOutlet>
+                    <MediaCaptions className={styles.captions} />
+                </MediaOutlet>
                 <div className={styles.mediaBufferingContainer}>
                     <svg className={styles.mediaBufferingIcon} fill="none" viewBox="0 0 120 120" aria-hidden="true">
                         <circle className="opacity-25" cx="60" cy="60" r="54" stroke="currentColor" strokeWidth="8" />
@@ -277,14 +239,14 @@ export default function Watch(props: any) {
                             </div>
                             <div className={`${styles.ui} text-xl md:text-2xl leading-0 line-clamp-3 sm:line-clamp-2 overflow-hidden`}>{props.data.title.english ?? props.data.title.romaji}</div>
                             <div className={`${styles.ui} flex flex-row justify-center items-center gap-1`}>
-                                <div className="p-[4px] rounded-sm pb-0 mb-1 transition-all duration-200 cursor-pointer ease-in-out hover:bg-[hsla(0,0%,76%,.2)]" onClick={() => {
+                            <div className="p-[4px] rounded-sm pb-0 mb-1 transition-all duration-200 cursor-pointer ease-in-out hover:bg-[hsla(0,0%,76%,.2)]" onClick={() => {
                                     setOpen(!open);
                                     setShowChapters(false);
                                 }}>
                                     <svg className="material-symbols-outlined media-settings-icon" style={{
                                         transform: open ? "rotate(35deg)" : "rotate(0deg)", transition: "0.3s all ease",
                                     }} width="20" height="20" viewBox="0 0 20 20" fill="white" xmlns="http://www.w3.org/2000/svg">
-                                    <path fillRule="evenodd" clipRule="evenodd" d="M7.87568 0.666664C7.58751 0.666664 7.34252 0.87709 7.29903 1.16196L6.85555 4.06677C6.85001 4.10301 6.82774 4.13448 6.79561 4.15213C6.70884 4.19979 6.62325 4.24932 6.53889 4.30067C6.50752 4.31977 6.46906 4.32337 6.43485 4.31003L3.69626 3.24231C3.42784 3.13766 3.12323 3.24463 2.97918 3.49413L0.85547 7.17251C0.711385 7.42207 0.771125 7.73945 0.996083 7.91955L3.29145 9.75719C3.32008 9.78011 3.3362 9.81515 3.3354 9.85181C3.33433 9.90086 3.3338 9.95004 3.3338 9.99935C3.3338 10.0488 3.33434 10.0981 3.33541 10.1473C3.33621 10.184 3.3201 10.219 3.29149 10.2419L0.996515 12.0805C0.771678 12.2607 0.712012 12.578 0.856059 12.8275L2.97977 16.5058C3.12386 16.7554 3.42859 16.8624 3.69704 16.7576L6.43522 15.6889C6.46944 15.6756 6.50792 15.6792 6.5393 15.6983C6.62352 15.7495 6.70896 15.799 6.79558 15.8465C6.82771 15.8642 6.84999 15.8957 6.85552 15.9319L7.29903 18.8369C7.34252 19.1218 7.58751 19.3322 7.87568 19.3322H12.1231C12.4112 19.3322 12.6561 19.1219 12.6997 18.8371L13.1442 15.9325C13.1497 15.8963 13.172 15.8649 13.2041 15.8472C13.2912 15.7994 13.3772 15.7497 13.4619 15.6981C13.4932 15.679 13.5317 15.6754 13.5659 15.6888L16.303 16.757C16.5715 16.8618 16.8762 16.7548 17.0203 16.5053L19.144 12.8269C19.2881 12.5774 19.2284 12.2601 19.0035 12.08L16.7094 10.242C16.6808 10.2191 16.6647 10.1841 16.6655 10.1474C16.6666 10.0982 16.6671 10.0488 16.6671 9.99935C16.6671 9.95 16.6666 9.90078 16.6655 9.85169C16.6647 9.81503 16.6809 9.77998 16.7095 9.75707L19.004 7.92012C19.2289 7.74002 19.2887 7.42264 19.1446 7.17307L17.0209 3.4947C16.8768 3.2452 16.5722 3.13823 16.3038 3.24288L13.5663 4.31017C13.5321 4.32351 13.4936 4.31991 13.4623 4.30081C13.3774 4.24917 13.2914 4.19937 13.2041 4.15146C13.172 4.13383 13.1497 4.10236 13.1442 4.06613L12.6997 1.16176C12.6561 0.876982 12.4112 0.666664 12.1231 0.666664H7.87568ZM10.0001 13.7497C12.0713 13.7497 13.7504 12.0706 13.7504 9.99939C13.7504 7.92814 12.0713 6.24906 10.0001 6.24906C7.92881 6.24906 6.24974 7.92814 6.24974 9.99939C6.24974 12.0706 7.92881 13.7497 10.0001 13.7497Z"/>
+                                        <path fillRule="evenodd" clipRule="evenodd" d="M7.87568 0.666664C7.58751 0.666664 7.34252 0.87709 7.29903 1.16196L6.85555 4.06677C6.85001 4.10301 6.82774 4.13448 6.79561 4.15213C6.70884 4.19979 6.62325 4.24932 6.53889 4.30067C6.50752 4.31977 6.46906 4.32337 6.43485 4.31003L3.69626 3.24231C3.42784 3.13766 3.12323 3.24463 2.97918 3.49413L0.85547 7.17251C0.711385 7.42207 0.771125 7.73945 0.996083 7.91955L3.29145 9.75719C3.32008 9.78011 3.3362 9.81515 3.3354 9.85181C3.33433 9.90086 3.3338 9.95004 3.3338 9.99935C3.3338 10.0488 3.33434 10.0981 3.33541 10.1473C3.33621 10.184 3.3201 10.219 3.29149 10.2419L0.996515 12.0805C0.771678 12.2607 0.712012 12.578 0.856059 12.8275L2.97977 16.5058C3.12386 16.7554 3.42859 16.8624 3.69704 16.7576L6.43522 15.6889C6.46944 15.6756 6.50792 15.6792 6.5393 15.6983C6.62352 15.7495 6.70896 15.799 6.79558 15.8465C6.82771 15.8642 6.84999 15.8957 6.85552 15.9319L7.29903 18.8369C7.34252 19.1218 7.58751 19.3322 7.87568 19.3322H12.1231C12.4112 19.3322 12.6561 19.1219 12.6997 18.8371L13.1442 15.9325C13.1497 15.8963 13.172 15.8649 13.2041 15.8472C13.2912 15.7994 13.3772 15.7497 13.4619 15.6981C13.4932 15.679 13.5317 15.6754 13.5659 15.6888L16.303 16.757C16.5715 16.8618 16.8762 16.7548 17.0203 16.5053L19.144 12.8269C19.2881 12.5774 19.2284 12.2601 19.0035 12.08L16.7094 10.242C16.6808 10.2191 16.6647 10.1841 16.6655 10.1474C16.6666 10.0982 16.6671 10.0488 16.6671 9.99935C16.6671 9.95 16.6666 9.90078 16.6655 9.85169C16.6647 9.81503 16.6809 9.77998 16.7095 9.75707L19.004 7.92012C19.2289 7.74002 19.2887 7.42264 19.1446 7.17307L17.0209 3.4947C16.8768 3.2452 16.5722 3.13823 16.3038 3.24288L13.5663 4.31017C13.5321 4.32351 13.4936 4.31991 13.4623 4.30081C13.3774 4.24917 13.2914 4.19937 13.2041 4.15146C13.172 4.13383 13.1497 4.10236 13.1442 4.06613L12.6997 1.16176C12.6561 0.876982 12.4112 0.666664 12.1231 0.666664H7.87568ZM10.0001 13.7497C12.0713 13.7497 13.7504 12.0706 13.7504 9.99939C13.7504 7.92814 12.0713 6.24906 10.0001 6.24906C7.92881 6.24906 6.24974 7.92814 6.24974 9.99939C6.24974 12.0706 7.92881 13.7497 10.0001 13.7497Z"/>
                                     </svg>
                                 </div>
                                 <div onClick={() => {
@@ -298,228 +260,237 @@ export default function Watch(props: any) {
                                     </svg>
                                 </div>
                                 {fetchedLocal ? (
-                                  <SettingsPanel
-                                    setIsOpen={setOpen}
-                                    isOpen={open}
-                                    menuCon={
-                                        [
-                                            {
-                                                id: "initial",
-                                                items: [
-                                                    {
+                                    <SettingsPanel
+                                        setIsOpen={setOpen}
+                                        isOpen={open}
+                                        menuCon={
+                                            [
+                                                {
+                                                    id: "initial",
+                                                    items: [
+                                                        {
+                                                            html: "<div style='color: white'>Speed</div>",
+                                                            iconID: "speedIcon",
+                                                            open: "speed",
+                                                        },
+                                                        {
+                                                            html: "<div style='color: white'>Quality</div>",
+                                                            iconID: "qualIcon",
+                                                            open: "quality",
+                                                        },
+                                                        {
+                                                            html: "<div style='color: white'>Subtitles</div>",
+                                                            iconID: "sourceIcon",
+                                                            open: "subtitle",
+                                                        },
+                                                        {
+                                                            html: "<div style='color: white'>Settings</div>",
+                                                            iconID: "configIcon",
+                                                            open: "config",
+                                                        },
+                                                    ],
+                                                },
+                                                {
+                                                    id: "speed",
+                                                    selectableScene: true,
+                                                    heading: {
                                                         html: "<div style='color: white'>Speed</div>",
-                                                        iconID: "speedIcon",
                                                         open: "speed",
+                                                        hideSubArrow: true,
                                                     },
-                                                    {
-                                                        html: "<div style='color: white'>Quality</div>",
-                                                        iconID: "qualIcon",
-                                                        open: "quality",
-                                                    },
-                                                    {
-                                                        html: "<div style='color: white'>Subtitles</div>",
-                                                        iconID: "sourceIcon",
-                                                        open: "subtitle",
-                                                    },
-                                                    {
-                                                        html: "<div style='color: white'>Settings</div>",
-                                                        iconID: "configIcon",
-                                                        open: "config",
-                                                    },
-                                                ],
-                                            },
-                                            {
-                                                id: "speed",
-                                                selectableScene: true,
-                                                heading: {
-                                                    html: "<div style='color: white'>Speed</div>",
-                                                    open: "speed",
-                                                    hideSubArrow: true,
-                                                },
-                                                items: [
-                                                    {
-                                                        html: `<div class="radioItemWrapper"><div class="radioButtonOutside"><div class="radioButtonInside"></div></div> 0.5x</div>`,
-                                                        callback: () => {},
-                                                        highlightable: true,
-                                                        selected: false,
-                                                    },
-                                                    {
-                                                        html: `<div class="radioItemWrapper"><div class="radioButtonOutside"><div class="radioButtonInside"></div></div> 1x</div>`,
-                                                        callback: () => {},
-                                                        highlightable: true,
-                                                        selected: true,
-                                                    },
-                                                    {
-                                                        html: `<div class="radioItemWrapper"><div class="radioButtonOutside"><div class="radioButtonInside"></div></div> 1.5x</div>`,
-                                                        callback: () => {},
-                                                        highlightable: true,
-                                                        selected: false,
-                                                    },
-                                                ],
-                                            },
-                                            {
-                                                id: "quality",
-                                                selectableScene: true,
-                                                heading: {
-                                                    html: "<div style='color: white'>Quality</div>",
-                                                    open: "quality",
-                                                    hideSubArrow: true,
-                                                },
-                                                items: props.sources && props.sources.sources[0] ? props.sources.sources.map((ep: any) => {
-                                                    return {
-                                                        html: `<div class="qualityItem"><div class="radioItemWrapper"><div class="radioButtonOutside"><div class="radioButtonInside"></div></div>${
-                                                            ep.quality
-                                                        }</div><h4 class="hdText">${
-                                                            ep.quality == "1080p"
-                                                                ? "HD"
-                                                                : ep.quality == "720p"
-                                                                ? "SD"
-                                                                : ""
-                                                        }</h4></div>`,
-                                                        altText: ep.quality,
-                                                        callback: () => changeQuality(ep.url),
-                                                        highlightable: true,
-                                                        selected: ep.quality == "1080p" ? true : false,
-                                                    };
-                                                }) : [],
-                                            },
-                                            {
-                                                id: "subtitle",
-                                                selectableScene: true,
-                                                heading: {
-                                                    text: "<div style='color: white'>Subtitles</div>",
-                                                },
-                                                items: props.menuSubs.map((sub: any, index:number) => {
-                                                    if (!sub.open) {
-                                                        return {
-                                                            text: sub.text,
-                                                            callback: () => changeSub(sub.url),
+                                                    items: [
+                                                        {
+                                                            html: `<div class="radioItemWrapper"><div class="radioButtonOutside"><div class="radioButtonInside"></div></div> 0.5x</div>`,
+                                                            callback: () => changeSpeed(0.5),
                                                             highlightable: true,
-                                                            selected: sub.text == "English" ? true : false,
-                                                        };
-                                                    } else {
-                                                        return {
-                                                            text: "Styling",
-                                                            iconID: "fillIcon",
-                                                            open: "subStyle",
-                                                        }
-                                                    }
-                                                }),
-                                            },
-                                            {
-                                                id: "subStyle",
-                                                selectableScene: true,
-                                                heading: {
-                                                    text: "<div style='color: white'>Subtitle Styling</div>",
+                                                            selected: false,
+                                                        },
+                                                        {
+                                                            html: `<div class="radioItemWrapper"><div class="radioButtonOutside"><div class="radioButtonInside"></div></div> 1x</div>`,
+                                                            callback: () => changeSpeed(1),
+                                                            highlightable: true,
+                                                            selected: true,
+                                                        },
+                                                        {
+                                                            html: `<div class="radioItemWrapper"><div class="radioButtonOutside"><div class="radioButtonInside"></div></div> 1.5x</div>`,
+                                                            callback: () => changeSpeed(1.5),
+                                                            highlightable: true,
+                                                            selected: false,
+                                                        },
+                                                    ],
                                                 },
-                                                items: [
-                                                    {
-                                                        text: "Disable Subs",
-                                                        toggle: true,
-                                                        toggleOn: () => disableSubs(true),
-                                                        toggleOff: () => disableSubs(false),
-                                                    },
-                                                    {
-                                                        text: "Font Color",
-                                                        textBox: true,
-                                                        value: fontColor,
-                                                        customId: "fontColor",
-                                                        onInput: function (value:any) {
-                                                            updateFontColor(value.target.value);
-                                                        },
-                                                    },
-                                                    {
-                                                        text: "Bg. Color",
-                                                        textBox: true,
-                                                        value: bgColor,
-                                                        customId: "bgColor",
-                                                        onInput: function (value:any) {
-                                                            updateBackground(value.target.value);
-                                                        },
-                                                    },
-                                                    {
-                                                        text: "Font Size",
-                                                        textBox: true,
-                                                        value: "3.5",
-                                                        customId: "fontSize",
-                                                        onInput: function (value:any) {
-                                                            updateFontSize(value.target.value);
-                                                        },
-                                                    },
-                                                    {
-                                                        text: "Margin Bottom",
-                                                        textBox: true,
-                                                        value: cueMb,
-                                                        customId: "marginBottom",
-                                                        onInput: function (value:any) {
-                                                            updateCueMb(value.target.value);
-                                                        },
-                                                    },
-                                                ],
-                                            },
-                                            {
-                                                id: "fillmode",
-                                                heading: {
-                                                    text: "<div style='color: white'>Fill Mode</div>",
-                                                },
-                                                items: [
-                                                    {
-                                                        text: "Normal",
-                                                        highlightable: true,
-                                                        selected: true,
-                                                    },
-                                                    {
-                                                        text: "Stretch",
-                                                        highlightable: true,
-                                                    },
-                                                    {
-                                                        text: "Subtitles",
-                                                        highlightable: true,
-                                                    },
-                                                    {
-                                                        text: "Fill",
+                                                {
+                                                    id: "quality",
+                                                    selectableScene: true,
+                                                    heading: {
+                                                        html: "<div style='color: white'>Quality</div>",
                                                         open: "quality",
-                                                        // "highlightable": true
+                                                        hideSubArrow: true,
                                                     },
-                                                ],
-                                            },
-                            
-                                            {
-                                                id: "config",
-                                                heading: {
-                                                    text: "<div style='color: white'>Settings</div>",
-                                                    back: true,
+                                                    items: props.sources && props.sources.sources[0] ? props.sources.sources.map((ep: any) => {
+                                                        return {
+                                                            html: `<div class="qualityItem"><div class="radioItemWrapper"><div class="radioButtonOutside"><div class="radioButtonInside"></div></div>${
+                                                                ep.quality
+                                                            }</div><h4 class="hdText">${
+                                                                ep.quality == "1080p"
+                                                                    ? "HD"
+                                                                    : ep.quality == "720p"
+                                                                    ? "SD"
+                                                                    : ""
+                                                            }</h4></div>`,
+                                                            altText: ep.quality,
+                                                            callback: () => changeQuality(ep.url),
+                                                            highlightable: true,
+                                                            selected: ep.url === src,
+                                                        };
+                                                    }) : [],
                                                 },
-                                                items: [
-                                                    {
-                                                        html: '<h3 class="qualityText" id="auto-next">Auto-Next</h3>',
-                                                        customId: "autoNext",
-                                                        toggle: true,
-                                                        toggleOn: () => changeAutoNext(true),
-                                                        toggleOff: () => changeAutoNext(false),
-                                                        on: autoNext
+                                                {
+                                                    id: "subtitle",
+                                                    selectableScene: true,
+                                                    heading: {
+                                                        text: "<div style='color: white'>Subtitles</div>",
                                                     },
-                                                    {
-                                                        html: '<h3 class="qualityText" id="auto-fullscreen">Auto-Fullscreen</h3>',
-                                                        customId: "autoFullscreen",
-                                                        toggle: true,
-                                                        toggleOn: () => changeAutoFullscreen(true),
-                                                        toggleOff: () => changeAutoFullscreen(false),
-                                                        on: autoFullscreen
+                                                    items: props.menuSubs.map((sub: any, index:number) => {
+                                                        if (!sub.open) {
+                                                            return {
+                                                                text: sub.text,
+                                                                callback: () => changeSub(sub.url),
+                                                                highlightable: true,
+                                                                selected: sub.text == "English" ? true : false,
+                                                            };
+                                                        } else {
+                                                            return {
+                                                                text: "Styling",
+                                                                iconID: "fillIcon",
+                                                                open: "subStyle",
+                                                            }
+                                                        }
+                                                    }),
+                                                },
+                                                {
+                                                    id: "subStyle",
+                                                    selectableScene: true,
+                                                    heading: {
+                                                        text: "<div style='color: white'>Subtitle Styling</div>",
                                                     },
-                                                    {
-                                                        html: '<h3 class="qualityText" id="auto-skip">Auto-Skip</h3>',
-                                                        customId: "autoSkip",
-                                                        toggle: true,
-                                                        toggleOn: () => changeAutoSkip(true),
-                                                        toggleOff: () => changeAutoSkip(false),
-                                                        on: autoSkip
+                                                    items: [
+                                                        {
+                                                            text: "Disable Subs",
+                                                            toggle: true,
+                                                            toggleOn: () => disableSubs(true),
+                                                            toggleOff: () => disableSubs(false),
+                                                        },
+                                                        {
+                                                            text: "Font Color",
+                                                            textBox: true,
+                                                            value: fontColor,
+                                                            customId: "fontColor",
+                                                            onInput: function (value:any) {
+                                                                updateFontColor(value.target.value);
+                                                            },
+                                                        },
+                                                        {
+                                                            text: "Bg. Color",
+                                                            textBox: true,
+                                                            value: bgColor,
+                                                            customId: "bgColor",
+                                                            onInput: function (value:any) {
+                                                                updateBackground(value.target.value);
+                                                            },
+                                                        },
+                                                        {
+                                                            text: "Font Size",
+                                                            textBox: true,
+                                                            value: "3.5",
+                                                            customId: "fontSize",
+                                                            onInput: function (value:any) {
+                                                                updateFontSize(value.target.value);
+                                                            },
+                                                        },
+                                                        {
+                                                            text: "Margin Top",
+                                                            textBox: true,
+                                                            value: cueMt,
+                                                            customId: "marginTop",
+                                                            onInput: function (value:any) {
+                                                                updateCueMt(value.target.value);
+                                                            },
+                                                        },
+                                                        {
+                                                            text: "Margin Bottom",
+                                                            textBox: true,
+                                                            value: cueMb,
+                                                            customId: "marginBottom",
+                                                            onInput: function (value:any) {
+                                                                updateCueMb(value.target.value);
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                                {
+                                                    id: "fillmode",
+                                                    heading: {
+                                                        text: "<div style='color: white'>Fill Mode</div>",
                                                     },
-                                                ],
-                                            },
-                                        ]
-                                    }
-                                />  
+                                                    items: [
+                                                        {
+                                                            text: "Normal",
+                                                            highlightable: true,
+                                                            selected: true,
+                                                        },
+                                                        {
+                                                            text: "Stretch",
+                                                            highlightable: true,
+                                                        },
+                                                        {
+                                                            text: "Subtitles",
+                                                            highlightable: true,
+                                                        },
+                                                        {
+                                                            text: "Fill",
+                                                            open: "quality",
+                                                            // "highlightable": true
+                                                        },
+                                                    ],
+                                                },
+                                
+                                                {
+                                                    id: "config",
+                                                    heading: {
+                                                        text: "<div style='color: white'>Settings</div>",
+                                                        back: true,
+                                                    },
+                                                    items: [
+                                                        {
+                                                            html: '<h3 class="qualityText" id="auto-next">Auto-Next</h3>',
+                                                            customId: "autoNext",
+                                                            toggle: true,
+                                                            toggleOn: () => changeAutoNext(true),
+                                                            toggleOff: () => changeAutoNext(false),
+                                                            on: autoNext
+                                                        },
+                                                        {
+                                                            html: '<h3 class="qualityText" id="auto-fullscreen">Auto-Fullscreen</h3>',
+                                                            customId: "autoFullscreen",
+                                                            toggle: true,
+                                                            toggleOn: () => changeAutoFullscreen(true),
+                                                            toggleOff: () => changeAutoFullscreen(false),
+                                                            on: autoFullscreen
+                                                        },
+                                                        {
+                                                            html: '<h3 class="qualityText" id="auto-skip">Auto-Skip</h3>',
+                                                            customId: "autoSkip",
+                                                            toggle: true,
+                                                            toggleOn: () => changeAutoSkip(true),
+                                                            toggleOff: () => changeAutoSkip(false),
+                                                            on: autoSkip
+                                                        },
+                                                    ],
+                                                },
+                                            ]
+                                        }
+                                    />
                                 ) : null}
                                 <ChaptersPanel
                                     chapters={props.chaptersData}
@@ -538,13 +509,26 @@ export default function Watch(props: any) {
                                     <svg slot="play" height="32" id="Layer_1" version="1.1" viewBox="0 0 512 512" width="32" xmlSpace="preserve" xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" {...({} as any)}>
                                         <path d="M405.2,232.9L126.8,67.2c-3.4-2-6.9-3.2-10.9-3.2c-10.9,0-19.8,9-19.8,20H96v344h0.1c0,11,8.9,20,19.8,20  c4.1,0,7.5-1.4,11.2-3.4l278.1-165.5c6.6-5.5,10.8-13.8,10.8-23.1C416,246.7,411.8,238.5,405.2,232.9z" fill="#fff" />
                                     </svg>
+                                    <svg slot="replay" height="32" id="Layer_1" version="1.1" viewBox="0 0 512 512" width="32" xmlSpace="preserve" xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" {...({} as any)}>
+                                        <path d="M405.2,232.9L126.8,67.2c-3.4-2-6.9-3.2-10.9-3.2c-10.9,0-19.8,9-19.8,20H96v344h0.1c0,11,8.9,20,19.8,20  c4.1,0,7.5-1.4,11.2-3.4l278.1-165.5c6.6-5.5,10.8-13.8,10.8-23.1C416,246.7,411.8,238.5,405.2,232.9z" fill="#fff" />
+                                    </svg>
                                     <svg slot="pause" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" className="transition-all decoration-neutral-150 ease-linear" {...({} as any)}>
                                         <path d="M10.65 19.11V4.89c0-1.35-.57-1.89-2.01-1.89H5.01C3.57 3 3 3.54 3 4.89v14.22C3 20.46 3.57 21 5.01 21h3.63c1.44 0 2.01-.54 2.01-1.89ZM21.002 19.11V4.89c0-1.35-.57-1.89-2.01-1.89h-3.63c-1.43 0-2.01.54-2.01 1.89v14.22c0 1.35.57 1.89 2.01 1.89h3.63c1.44 0 2.01-.54 2.01-1.89Z" fill="#ffffff"></path>
                                     </svg>
+
+                                    <div role="tooltip" slot="tooltip-top-center">
+                                        <span slot="play-tooltip">Play</span>
+                                        <span slot="pause-tooltip">Pause</span>
+                                    </div>
                                 </MediaPlayButton>
                             </div>
                             <div className="flex center justify-center items-center h-[35px] transition-all duration-200 hover:bg-[hsla(0,0%,76%,.2)] rounded-md">
-                                <MediaMuteButton aria-keyshortcuts="m" />
+                                <MediaMuteButton aria-keyshortcuts="m" defaultAppearance>
+                                    <MediaTooltip position="top center">
+                                        <span slot="mute">Mute</span>
+                                        <span slot="unmute">Unmute</span>
+                                    </MediaTooltip>
+                                </MediaMuteButton>
                                 <MediaVolumeSlider className="group mx-[calc(var(--thumb-size)/2)] h-12 flex items-center transition-all duration-200 ease-in-out min-w-[5vw]" style={{ '--thumb-size': '14px', '--track-height': '4px' }}>
                                     <div className="absolute top-1/2 left-0 z-0 h-[var(--track-height)] w-full -translate-y-1/2 transform bg-[#5a595a] outline-none group-data-[focus]:ring-4 group-data-[focus]:ring-blue-400"></div>
                                     <div className="absolute top-1/2 left-0 z-20 h-[var(--track-height)] w-full -translate-y-1/2 scale-x-[var(--slider-fill-rate)] transform bg-white will-change-transform" style={{ transformOrigin: 'left center' }} />
@@ -558,12 +542,21 @@ export default function Watch(props: any) {
                             </div>
                         </div>
                         <div className={`${styles.ui} flex flex-row justify-center items-center m-0 z-30 w-[95%]`}>
-                            <MediaTimeSlider className="flex items-center w-full"></MediaTimeSlider>
+                            <MediaTimeSlider className="flex items-center w-full">
+                                <MediaSliderThumbnail slot="preview" />
+                            </MediaTimeSlider>
                         </div>
                         <div className={`${styles.ui} flex flex-row justify-center items-center`}>
-                        <div className="flex flex-row justify-center items-center text-white font-bold"><MediaTime type="current"></MediaTime>/<MediaTime type="duration"></MediaTime></div>
+                            <div className="flex flex-row justify-center items-center text-white font-bold">
+                                <MediaTime type="current"></MediaTime>/<MediaTime type="duration"></MediaTime>
+                            </div>
                             <div className="flex center justify-center items-center h-[35px] transition-all duration-200 hover:bg-[hsla(0,0%,76%,.2)] rounded-md">
-                                <MediaFullscreenButton aria-keyshortcuts="f"></MediaFullscreenButton>
+                                <MediaFullscreenButton aria-keyshortcuts="f" defaultAppearance>
+                                    <MediaTooltip position="top center">
+                                        <span slot="enter">Enter Fullscreen</span>
+                                        <span slot="exit">Exit Fullscreen</span>
+                                    </MediaTooltip>
+                                </MediaFullscreenButton>
                             </div>
                         </div>
                     </div>
@@ -576,8 +569,9 @@ export default function Watch(props: any) {
 
 export async function getServerSideProps(context: any) {
     const id = "155783";
-    let provider = "Zoro";
+    let provider = "zoro";
     const watchId = decodeURIComponent("%2Fwatch%2Fheavenly-delusion-18349%3Fep%3D99937");
+    const subDub: string = context?.params?.subDub ?? "sub";
 
     if (provider.toLowerCase().includes("dub")) {
         provider = "gogoanime";
@@ -595,9 +589,6 @@ export async function getServerSideProps(context: any) {
 
     for (let i = 0; i < episodes.length; i++) {
         const providerEp = episodes[i];
-        
-        providerEp.providerId = providerEp.provider;
-
         for (let j = 0; j < providerEp.episodes.length; j++) {
             const episode = providerEp.episodes[j];
             if (episode?.id === watchId || episode?.url === watchId) {
@@ -609,31 +600,69 @@ export async function getServerSideProps(context: any) {
                 if (title.length > 30) {
                     title = episode.title.substring(0, 30) + "...";
                 }
-                chapters.push({
-                    title: title ?? "Episode " + (i + 1),
-                    length: providerEp.providerId,
-                    url: `/watch/${id}/${provider}/${encodeURIComponent(episode.id)}`,
-                    selected: episode?.id === watchId || episode?.url === watchId
-                })
+                
+                if (subDub === "dub") {
+                    if (episode?.hasDub) {
+                        chapters.push({
+                            title: title ?? "Episode " + (i + 1),
+                            number: episode.number ?? i + 1,
+                            length: capitalize(providerEp.providerId),
+                            url: `/watch/${id}/${provider}/${encodeURIComponent(episode.id)}/dub`,
+                            selected: episode?.id === watchId || episode?.url === watchId
+                        })
+                    }
+                } else {
+                    chapters.push({
+                        title: title ?? "Episode " + (i + 1),
+                        number: episode.number ?? i + 1,
+                        length: capitalize(providerEp.providerId),
+                        url: `/watch/${id}/${provider}/${encodeURIComponent(episode.id)}/sub`,
+                        selected: episode?.id === watchId || episode?.url === watchId
+                    })
+                }
             }
         }
     }
     
     const { data: watchData } = await axios.post(String(process.env.BACKEND_URL) + `/sources`, {
-        id: id,
-        provider: provider,
-        watchId: watchId
-    }, { method: "POST", headers: { "Content-Type": "application/json" } });
+        providerId: provider,
+        watchId: watchId,
+        episode: episodeNumber,
+        subType: subDub,
+        id: id
+    }, { method: "POST", headers: { "Content-Type": "application/json" } }).catch((err) => {
+        //console.error(err);
+        return {
+            data: {
+                sources: [],
+                subtitles: [],
+                intro: {
+                    start: 0,
+                    end: 0
+                },
+                outro: {
+                    start: 0,
+                    end: 0
+                }
+            }
+        }
+    });
+
+    /*
+    for (let i = 0; i < watchData.sources.length; i++) {
+        if (watchData.headers && Object.keys(watchData.headers).length > 0) {
+            watchData.sources[i].url = `${String(process.env.M3U8_PROXY)}/proxy/m3u8/${encodeURIComponent(String(watchData.sources[i].url))}/${encodeURIComponent(JSON.stringify(watchData.headers))}`;
+        }
+    }
+    */
 
     for (let i = 0; i < watchData.sources.length; i++) {
         if (provider === "9anime") {
-            watchData.sources[i].url = `${String(process.env.M3U8_PROXY)}/cors?url=${encodeURIComponent(String(watchData.sources[i].url))}&headers=${encodeURIComponent(JSON.stringify({ Referer: "https://9anime.pl" }))}`;
-        } else if (provider === "enime") {
-            watchData.sources[i].url = `${String(process.env.M3U8_PROXY)}/cors?url=${encodeURIComponent(String(watchData.sources[i].url))}&headers=${encodeURIComponent(JSON.stringify({ Referer: "https://9anime.pl" }))}`;
-        } else if (provider === "gogoanime") {
-            watchData.sources[i].url = `${String(process.env.M3U8_PROXY)}/cors?url=${encodeURIComponent(String(watchData.sources[i].url))}&headers=${encodeURIComponent(JSON.stringify({ Referer: "https://9anime.pl" }))}`;
+            watchData.sources[i].url = `${String(process.env.M3U8_PROXY)}/proxy/m3u8/${encodeURIComponent(String(watchData.sources[i].url))}/${encodeURIComponent(JSON.stringify({ Referer: "https://9anime.pl" }))}`;
         } else if (provider === "animepahe") {
-            watchData.sources[i].url = `${String(process.env.M3U8_PROXY)}/cors?url=${encodeURIComponent(String(watchData.sources[i].url))}&headers=${encodeURIComponent(JSON.stringify({ Referer: "https://kwik.cx" }))}`;
+            watchData.sources[i].url = `${String(process.env.M3U8_PROXY)}/proxy/m3u8/${encodeURIComponent(String(watchData.sources[i].url))}/${encodeURIComponent(JSON.stringify({ Referer: "https://kwik.cx" }))}`;
+        } else if (provider === "gogoanime") {
+            watchData.sources[i].url = `${String(process.env.M3U8_PROXY)}/proxy/m3u8/${encodeURIComponent(String(watchData.sources[i].url))}/${encodeURIComponent(JSON.stringify({ Referer: "https://kwik.cx" }))}`;
         }
     }
 
@@ -654,9 +683,16 @@ export async function getServerSideProps(context: any) {
         return s && s[0]?.toUpperCase() + s.slice(1);
     }
 
+    let thumbnails = "";
+
     watchData.subtitles.map((ep: any, index: number) => {
         const langCode = ep.lang.split("-")[0];
         let language:any = "Unknown";
+
+        if (ep.lang === "Thumbnails") {
+            thumbnails = `${String(process.env.M3U8_PROXY)}/proxy/${encodeURIComponent(ep.url)}`;
+            return;
+        }
 
         try {
             language = languageNames.of(langCode);
@@ -674,10 +710,13 @@ export async function getServerSideProps(context: any) {
     return {
         props: {
             data,
+            provider: provider,
             sources: watchData,
             menuSubs: subs,
             chaptersData: chapters,
-            watchId: watchId
+            watchId: watchId,
+            thumbnails: thumbnails,
+            episodeNumber
         },
     };
 }
