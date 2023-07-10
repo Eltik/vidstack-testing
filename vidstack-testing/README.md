@@ -1,28 +1,40 @@
-# Create T3 App
+# anify-frontend
+Robust NextJS server for displaying data via the backend server.
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+# Information
+The frontend is pretty simple: using NextJS 13's server-side-rendering (SSR), requests are made to the backend locally and then displayed to the user. There isn't much else to it.
 
-## What's next? How do I make an app with this?
+# Building the Repository
+If you wish to use Anify's frontend for yourself, feel free to follow the instructions below. Installation is very simple, but if you need help support can be directed to Anify's [Discord](https://anify.tv/discord).
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+## Prerequisites
+Anify requires at a minimum NodeJS version `16.0.0` and NPM version `8.0.0` (*untested*). For using this repository as a web server, installation is relatively simple.
+1. Clone the repository via `git clone https://github.com/Eltik/Anify`.
+2. `cd` into the folder (`cd anify-frontend`).
+3. Install `node_modules` via `npm i` or `yarn install`.
+4. Setup the `.env` file (see below).
+5. Run `npm run dev` to start the web server.
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+## .env File
+You can configure the web server via a `.env` file (not included). Default values are shown below. The only required values are the `DATABASE_URL`, `BACKEND_URL`, and `M3U8_PROXY`. You may change the values below to your liking:
+```
+DATABASE_URL="file:./db.sqlite"
+BACKEND_URL="http://localhost:3060"
+M3U8_PROXY="https://proxy.m3u8.proxy"
+ANILIST_ID=""
+ANILIST_SECRET=""
+REDIRECT_URL="http://localhost:3000/api/auth"
+```
+Some basic documentation on `.env` values:
+- `DATABASE_URL`: Used for accounts. Required for prisma to work properly.
+- `BACKEND_URL`: The URL to send requests to for the backend.
+- `M3U8_PROXY`: The m3u8 proxy to use. Proxy can be cloned [here](https://github.com/chaycee/M3U8Proxy).
+- `ANILIST_ID`: AniList client ID for logins.
+- `ANILIST_SECRET`: AniList secret for logins.
+- `REDIRECT_URL`: Redirect URL for AniList logins.
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+## Contribution
+This project is a work-in-progress, so contribution would be appreciated. If you'd like to contribute, feel free to open a [Pull Request](https://github.com/Eltik/Anify/pulls).
 
-## Learn More
-
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
-
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
-
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
-
-## How do I deploy this?
-
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+# TBD
+The README for this project isn't done! Join our [Discord](https://anify.tv/discord) for more information.

@@ -58,6 +58,25 @@
     height: 100%;
 }
 
+.timeSlider [part~="track"] {
+    border-radius: 15px;
+    transition: all;
+    transition-duration: 200ms;
+}
+
+.timeSlider [part~="track"] {
+    height: 8px;
+    border: none;
+}
+
+.timeSlider [part~="track-fill"] {
+    background: rgb(76, 184, 117);
+}
+
+.thumb {
+    display: none;
+}
+
 .captions {
     --cue-margin_top: 0vh;
     --cue-margin_bottom: 5vh;

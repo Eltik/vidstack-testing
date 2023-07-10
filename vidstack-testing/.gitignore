@@ -40,3 +40,9 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+package-lock.json
+
+# PWA
+workbox-*.*
+sw.*
